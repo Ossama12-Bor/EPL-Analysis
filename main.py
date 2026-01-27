@@ -75,7 +75,83 @@ plt.savefig("basic.png")
 
 
 
+########################################################
+# Conversion rate from half-time lead to full-time win
+########################################################
+df_copy["LeadHeld"] = (
+    ((df_copy["HalfTimeResult"] == "H") & (df_copy["FullTimeResult"] == "H")) |
+    ((df_copy["HalfTimeResult"] == "A") & (df_copy["FullTimeResult"] == "A"))
+).astype(int)
 
+
+def get_leading_team(row):
+    if row["HalfTimeResult"] == "H":
+        return row["HomeTeam"]
+    elif row["HalfTimeResult"] == "A":
+        return row["AwayTeam"]
+    return None
+
+df_copy["LeadingTeam"] = df_copy.apply(get_leading_team, axis=1)
+
+# ==========================================================
+# 1. TABLEAU GLOBAL : Capacité à maintenir l'avantage (H & A)
+# ==========================================================
+
+team_conversion = df_copy[df_copy["HalfTimeResult"] != "D"].groupby("LeadingTeam")["LeadHeld"].agg(["sum", "count"])
+team_conversion["ConversionRate"] = (team_conversion["sum"] / team_conversion["count"] * 100)
+top_10_global = team_conversion.sort_values("ConversionRate", ascending=False).head(10)
+
+fig1, ax1 = plt.subplots(figsize=(10, 4))
+ax1.axis('off')
+
+table_data_global = top_10_global.reset_index()
+table_data_global.columns = ['Équipe', 'Victoires confirmées', 'Avances mi-temps', 'Taux de Conversion (%)']
+table_data_global['Taux de Conversion (%)'] = table_data_global['Taux de Conversion (%)'].round(2)
+
+table1 = ax1.table(cellText=table_data_global.values, 
+                   colLabels=table_data_global.columns, 
+                   cellLoc='center', loc='center',
+                   colColours=["#f2f2f2"] * 4)
+
+table1.auto_set_font_size(False)
+table1.set_fontsize(10)
+table1.scale(1.2, 1.8) 
+
+plt.title("Top 10 Global : Maintenir l'avantage jusqu'à la victoire", pad=20)
+plt.savefig("conversion_global.png")
+
+# ==========================================================
+# 2. TABLEAU DOMICILE : Solidité à domicile après avance
+# ==========================================================
+
+# On filtre uniquement les cas où le score à la mi-temps est 'H'
+home_leading = df_copy[df_copy["HalfTimeResult"] == "H"].copy()
+
+team_home_conv = home_leading.groupby("HomeTeam")["LeadHeld"].agg(["sum", "count"])
+team_home_conv["ConversionRate"] = (team_home_conv["sum"] / team_home_conv["count"] * 100)
+top_10_home = team_home_conv.sort_values("ConversionRate", ascending=False).head(10)
+
+fig2, ax2 = plt.subplots(figsize=(10, 4))
+ax2.axis('off')
+
+table_data_home = top_10_home.reset_index()
+table_data_home.columns = ['Équipe (Domicile)', 'Victoires confirmées', 'Avances mi-temps', 'Taux de Conversion (%)']
+table_data_home['Taux de Conversion (%)'] = table_data_home['Taux de Conversion (%)'].round(2)
+
+# On utilise une couleur bleue pour différencier le graphique "Domicile"
+table2 = ax2.table(cellText=table_data_home.values, 
+                   colLabels=table_data_home.columns, 
+                   cellLoc='center', loc='center',
+                   colColours=["#d1e5f0"] * 4)
+
+table2.auto_set_font_size(False)
+table2.set_fontsize(10)
+table2.scale(1.2, 1.8) 
+
+plt.title("Top 10 Domicile : Maintenir l'avantage jusqu'à la victoire", pad=20)
+plt.savefig("conversion_home.png")
+
+plt.show()
 ########################################################
 # Physical trend (fouls / yellow cards / red cards)
 ########################################################
@@ -278,6 +354,7 @@ for _, match in df_copy.iterrows():
     })
 
 analysis_df = pd.DataFrame(analysis_data)
+form_prob = analysis_df.groupby("FormDiff")["HomeWin"].mean()
 
 plt.figure(figsize=(10,5))
 
